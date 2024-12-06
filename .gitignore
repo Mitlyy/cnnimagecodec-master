@@ -1,0 +1,6 @@
+*venv
+image*.jpeg
+image*bin
+build
+__pycache__
+compressed*
