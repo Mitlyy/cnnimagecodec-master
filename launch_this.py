@@ -123,7 +123,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import to_rgba
 
-def plot_ssim_bpp(testfolder, trainfolder, bees, NumImagesToShow=5):
+def plot_ssim_bpp(testfolder, trainfolder, bees):
     """
     Построение графика среднего SSIM/bpp для AE2, JPEG и предложенного кодека.
     """
@@ -136,7 +136,6 @@ def plot_ssim_bpp(testfolder, trainfolder, bees, NumImagesToShow=5):
     results = {'AE1_min_max': [], 'AE2_min_max': [], 'AE1_vector': [], 'AE2_vector': [],'AE1_old': [], 'AE2_old': [], 'JPEG': []}
 
     for b in bees:
-        print("BEEEEE", b)
         bpp2, _, decoded_imgsQ2 = NeuralCompressor_min_max(encoder2, decoder2, b=b)
         avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
         results['AE2_min_max'].append((b, avg_ssim_bpp_ae2))
@@ -149,6 +148,7 @@ def plot_ssim_bpp(testfolder, trainfolder, bees, NumImagesToShow=5):
         jpeg_ssim_bpp = []
         for i in range(NumImagesToShow):
             _, JPEG_bpp, JPEG_ssim = JPEGRDSingleImage(xtest[i, :, :, :], b, i)
+            print("QIAAAL:", _)
             jpeg_ssim_bpp.append(JPEG_ssim / JPEG_bpp)
         results['JPEG'].append((b, np.mean(jpeg_ssim_bpp)))
 
@@ -207,6 +207,9 @@ def plot_ssim_bpp(testfolder, trainfolder, bees, NumImagesToShow=5):
     plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
     plt.show()
 
+
+
+
 def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
     """
     Отображает изображения для методов NeuralCompressor_vector, NeuralCompressor_min_max,
@@ -216,8 +219,8 @@ def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
 
     for i, b in enumerate(bees):
         # Вызываем ваши функции для каждого метода
-        bpp_vec,  img_vec, Q_vec = NeuralCompressor_min_max(enc, dec, b)
-        bpp_minmax, img_minmax, Q_minmax  = NeuralCompressor_vector(enc, dec, b)
+        bpp_vec,  img_vec, Q_vec = NeuralCompressor_vector(enc, dec, b)
+        bpp_minmax, img_minmax, Q_minmax  =NeuralCompressor_min_max(enc, dec, b)
         bpp_nc, img_nc, Q_nc = NeuralCompressor(enc, dec, xtest, b=b)
         
         # Отображаем изображения
@@ -239,7 +242,7 @@ def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
 
 
 if __name__ == '__main__':
-    show_img = True
+    show_img = False
     xtest = LoadImagesFromFolder(testfolder)
     xtest = xtest / 255
     
