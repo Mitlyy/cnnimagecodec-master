@@ -45,7 +45,7 @@ n2M1=32
 n3M1=16
 
 #Number of images to be compressed and shown from the test folder
-NumImagesToShow = 10
+NumImagesToShow = 2
 
 #Number of bits for representation of the layers sample
 b = 4
@@ -214,13 +214,14 @@ def JPEGRDSingleImage(X,TargetBPP,i):
     I2 = numpy.array(image_dec.getdata()).reshape(image_dec.size[0], image_dec.size[1], 3)
 
     #print('\n\n Size = ',numpy.shape(I1))
-    psnr = ssim(I1[ :, :, 0], I2[ :, :, 0],data_range=255.0)
-    psnr = psnr + ssim(I1[ :, :, 1], I2[ :, :, 1],data_range=255.0)
-    psnr = psnr + ssim(I1[ :, :, 2], I2[ :, :, 2],data_range=255.0)
+    psnr = ssim(I1[ :, :, 0], I2[ :, :, 0],data_range=1.0)
+    psnr = psnr + ssim(I1[ :, :, 1], I2[ :, :, 1],data_range=1.0)
+    psnr = psnr + ssim(I1[ :, :, 2], I2[ :, :, 2],data_range=1.0)
     realpsnr=psnr/3.0
     JPEGfilename = 'image%i.jpeg' % i
     image.save(JPEGfilename, "JPEG", quality=realQ)
     return realQ, realbpp, realpsnr
+
 
 
 def NeuralCompressor(enc,dec,xtest, b=2):
@@ -253,9 +254,11 @@ def NeuralCompressor(enc,dec,xtest, b=2):
     declayers = K.cast(declayers, "float32") / pow(2, b)
     declayers = declayers + shift
     encoded_layers_quantized = numpy.zeros((NumImagesToShow, 16, 16, 16), numpy.double, 'C')
+    
     for i in range(NumImagesToShow):
         encoded_layers_quantized[i] = K.cast(declayers[i]*max_encoded_layers[i], "float32")
         encoded_layers[i] = K.cast(encoded_layers[i] * max_encoded_layers[i], "float32")
+        
     decoded_imgs = dec.predict(encoded_layers, batch_size=NumImagesToShow)
     decoded_imgsQ = dec.predict(encoded_layers_quantized, batch_size=NumImagesToShow)
     return bpp, decoded_imgs, decoded_imgsQ

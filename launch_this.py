@@ -4,8 +4,6 @@ from sklearn.cluster import KMeans
 # Assuming EntropyEncoder and EntropyDecoder are defined elsewhere
 
 def NeuralCompressor_min_max(enc, dec, b=2):
-
-
     encoded_layers = enc.predict(xtest, batch_size=NumImagesToShow)
     max_encoded_layers = np.zeros(NumImagesToShow, np.float16)
     min_encoded_layers = np.zeros(NumImagesToShow, np.float16)
@@ -37,7 +35,7 @@ def NeuralCompressor_min_max(enc, dec, b=2):
     for i in range(NumImagesToShow):
         decoded_layers[i] = (declayers[i] * (max_encoded_layers[i] - min_encoded_layers[i])) + min_encoded_layers[i]
 
-    decoded_imgs = dec.predict(decoded_layers, batch_size=NumImagesToShow)
+    decoded_imgs = dec.predict(encoded_layers, batch_size=NumImagesToShow)
     decoded_imgsQ = dec.predict(decoded_layers, batch_size=NumImagesToShow)  # Quantized decoding
 
     return bpp, decoded_imgs, decoded_imgsQ
@@ -79,7 +77,7 @@ def NeuralCompressor_vector(enc, dec, b=2):
         decoded_layers[i] = centroids[i][declayers[i].astype(int)].reshape(encoded_layers.shape[1:])
 
     # Декодирование изображений
-    decoded_imgs = dec.predict(decoded_layers, batch_size=NumImagesToShow)
+    decoded_imgs = dec.predict(encoded_layers, batch_size=NumImagesToShow)
     decoded_imgsQ = dec.predict(decoded_layers, batch_size=NumImagesToShow)  # Квантованное декодирование
 
     return bpp, decoded_imgs, decoded_imgsQ
@@ -109,105 +107,19 @@ def calculate_ssim_bpp(xtest, decoded_images, bpp):
     Вычисление среднего SSIM/bpp для декодированных изображений.
     """
     ssim_bpp_values = []
-    for i in range(len(xtest)):
+    for i in range(2):
         ssim_value = (
             ssim(xtest[i, :, :, 0], decoded_images[i, :, :, 0], data_range=1.0) +
             ssim(xtest[i, :, :, 1], decoded_images[i, :, :, 1], data_range=1.0) +
             ssim(xtest[i, :, :, 2], decoded_images[i, :, :, 2], data_range=1.0)
         ) / 3.0
-        ssim_bpp_values.append(ssim_value / bpp[i])
+        ssim_bpp_values.append(ssim_value)
     return np.mean(ssim_bpp_values)
 
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import to_rgba
-
-def plot_ssim_bpp(testfolder, trainfolder, bees):
-    """
-    Построение графика среднего SSIM/bpp для AE2, JPEG и предложенного кодека.
-    """
-    xtest = LoadImagesFromFolder(testfolder) / 255  
-
-
-    encoder, decoder = ImageCodecModel(trainfolder, 0)
-    encoder2, decoder2 = ImageCodecModel(trainfolder, 1)
-
-    results = {'AE1_min_max': [], 'AE2_min_max': [], 'AE1_vector': [], 'AE2_vector': [],'AE1_old': [], 'AE2_old': [], 'JPEG': []}
-
-    for b in bees:
-        bpp2, _, decoded_imgsQ2 = NeuralCompressor_min_max(encoder2, decoder2, b=b)
-        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
-        results['AE2_min_max'].append((b, avg_ssim_bpp_ae2))
-
-        bpp, _, decoded_imgsQ = NeuralCompressor_min_max(encoder, decoder, b=b)
-        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
-        results['AE1_min_max'].append((b, avg_ssim_bpp_ae))
-
-
-        jpeg_ssim_bpp = []
-        for i in range(NumImagesToShow):
-            _, JPEG_bpp, JPEG_ssim = JPEGRDSingleImage(xtest[i, :, :, :], b, i)
-            print("QIAAAL:", _)
-            jpeg_ssim_bpp.append(JPEG_ssim / JPEG_bpp)
-        results['JPEG'].append((b, np.mean(jpeg_ssim_bpp)))
-
-
-        bpp2, _, decoded_imgsQ2 = NeuralCompressor_vector(encoder2, decoder2, b=b)
-        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
-        results['AE2_vector'].append((b, avg_ssim_bpp_ae2))
-
-        bpp, _, decoded_imgsQ = NeuralCompressor_vector(encoder, decoder, b=b)
-        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
-        results['AE1_vector'].append((b, avg_ssim_bpp_ae))
-        
-        bpp2, _, decoded_imgsQ2 = NeuralCompressor(encoder2, decoder2,xtest, b=b)
-        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
-        results['AE2_old'].append((b, avg_ssim_bpp_ae2))
-
-        bpp, _, decoded_imgsQ = NeuralCompressor(encoder, decoder,xtest, b=b)
-        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
-        results['AE1_old'].append((b, avg_ssim_bpp_ae))
-        
-
-
-    plt.figure(figsize=(10, 6))
-        
-
-    colors = {
-        'AE2': 'blue',
-        'AE1': 'green',
-        'JPEG': 'orange'
-    }
-
-    for label, data in results.items():
-        b_values, ssim_bpp_values = zip(*data)
-
-        base_color = colors[label.split('_')[0]] if label != 'JPEG' else colors['JPEG']
-        
-        if '_old' in label:
-            color = to_rgba(base_color, alpha=0.7)  # Темнее и более прозрачный оттенок
-            linestyle = 'dashed'
-            
-        elif '_vector' in label:
-            color = to_rgba(base_color, alpha=0.8)
-            linestyle = 'dotted'
-        else:
-            color = base_color
-            linestyle = '-' 
-
-        plt.plot(
-            b_values, ssim_bpp_values, label=label, marker='o', color=color, linestyle=linestyle
-        )
-
-    plt.title('Средний SSIM/bpp для различных кодеков', fontsize=14)
-    plt.xlabel('b', fontsize=12)
-    plt.ylabel('Средний SSIM/bpp', fontsize=12)
-    plt.legend()
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.show()
-
-
 
 
 def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
@@ -226,9 +138,9 @@ def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
         # Отображаем изображения
         images = [Q_vec[0], Q_minmax[0], Q_nc[0]]
         titles = [
-            f"Vector: Q={calculate_ssim(Q_vec)}, bpp={np.mean(bpp_vec)}",
-            f"MinMax: Q={calculate_ssim(Q_minmax)}, bpp={np.mean(bpp_minmax)}",
-            f"NC: Q={calculate_ssim(Q_nc)}, bpp={np.mean(bpp_nc)}",
+            f"Vector: Q={calculate_ssim(Q_vec):3f}, bpp={np.mean(bpp_vec):3f}",
+            f"MinMax: Q={calculate_ssim(Q_minmax):3f}, bpp={np.mean(bpp_minmax):3f}",
+            f"NC: Q={calculate_ssim(Q_nc):3f}, bpp={np.mean(bpp_nc):3f}",
         ]
         
         for j, (img, title) in enumerate(zip(images, titles)):
@@ -238,6 +150,86 @@ def display_compressed_images(enc, dec, bees=[2, 3, 4, 5]):
             ax.axis('off')
 
     plt.tight_layout()
+    plt.show()
+
+def plot_ssim_bpp_by_bpp(testfolder, trainfolder, bees, NumImagesToShow=10):
+    """
+    Построение графика среднего SSIM для AE2, JPEG и предложенного кодека в зависимости от BPP.
+    """
+    xtest = LoadImagesFromFolder(testfolder) / 255  
+
+    encoder, decoder = ImageCodecModel(trainfolder, 0)
+    encoder2, decoder2 = ImageCodecModel(trainfolder, 1)
+
+    results = {'AE1_min_max': [], 'AE2_min_max': [], 'AE1_vector': [], 'AE2_vector': [], 'AE1_old': [], 'AE2_old': [], 'JPEG': []}
+
+    for b in bees:
+        bpp2, _, decoded_imgsQ2 = NeuralCompressor_min_max(encoder2, decoder2, b=b)
+        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
+        results['AE2_min_max'].append((np.mean(bpp2), avg_ssim_bpp_ae2))
+
+        bpp, _, decoded_imgsQ = NeuralCompressor_min_max(encoder, decoder, b=b)
+        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
+        results['AE1_min_max'].append((np.mean(bpp), avg_ssim_bpp_ae))
+
+        # JPEG
+        jpeg_ssim_bpp = []
+        jpeg_bpps = []
+
+
+        bpp2, _, decoded_imgsQ2 = NeuralCompressor_vector(encoder2, decoder2, b=b)
+        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
+        results['AE2_vector'].append((np.mean(bpp2), avg_ssim_bpp_ae2))
+
+        bpp, _, decoded_imgsQ = NeuralCompressor_vector(encoder, decoder, b=b)
+        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
+        results['AE1_vector'].append((np.mean(bpp), avg_ssim_bpp_ae))
+        
+        bpp2, _, decoded_imgsQ2 = NeuralCompressor(encoder2, decoder2, xtest, b=b)
+        avg_ssim_bpp_ae2 = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ2, bpp2)
+        results['AE2_old'].append((np.mean(bpp2), avg_ssim_bpp_ae2))
+
+        bpp, _, decoded_imgsQ = NeuralCompressor(encoder, decoder, xtest, b=b)
+        avg_ssim_bpp_ae = calculate_ssim_bpp(xtest[:NumImagesToShow], decoded_imgsQ, bpp)
+        results['AE1_old'].append((np.mean(bpp), avg_ssim_bpp_ae))
+
+        for i in range(NumImagesToShow):
+            _, JPEG_bpp, JPEG_ssim = JPEGRDSingleImage(xtest[i, :, :, :], np.mean(bpp), i)
+            jpeg_ssim_bpp.append(JPEG_ssim)
+            jpeg_bpps.append(JPEG_bpp)
+        results['JPEG'].append((np.mean(jpeg_bpps), np.mean(jpeg_ssim_bpp)))
+    plt.figure(figsize=(10, 6))
+
+    colors = {
+        'AE2': 'blue',
+        'AE1': 'green',
+        'JPEG': 'orange'
+    }
+
+    for label, data in results.items():
+        bpp_values, ssim_bpp_values = zip(*data)
+
+        base_color = colors[label.split('_')[0]] if label != 'JPEG' else colors['JPEG']
+
+        if '_old' in label:
+            color = to_rgba(base_color, alpha=0.7)  
+            linestyle = 'dashed'
+        elif '_vector' in label:
+            color = to_rgba(base_color, alpha=0.8)
+            linestyle = 'dotted'
+        else:
+            color = base_color
+            linestyle = '-'
+
+        plt.plot(
+            bpp_values, ssim_bpp_values, label=label, marker='o', color=color, linestyle=linestyle
+        )
+
+    plt.title('Средний SSIM для различных кодеков (зависимость от BPP)', fontsize=14)
+    plt.xlabel('BPP (биты на пиксель)', fontsize=12)
+    plt.ylabel('Средний SSIM', fontsize=12)
+    plt.legend()
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
     plt.show()
 
 
@@ -253,14 +245,15 @@ if __name__ == '__main__':
     
     bees = [2, 3, 4, 5]
     
-    if show_img:
-        NumImagesToShow = 1
+    # if show_img:
+    #     NumImagesToShow = 1
         
-        display_compressed_images(encoder, decoder)  
-        display_compressed_images(encoder2, decoder2)  
+    #     display_compressed_images(encoder, decoder)  
+    #     display_compressed_images(encoder2, decoder2)  
         
-    NumImagesToShow = 10
-    plot_ssim_bpp(testfolder, trainfolder, bees)
+    NumImagesToShow = 2
+    
+    plot_ssim_bpp_by_bpp(testfolder, trainfolder, bees)
     
     
 
